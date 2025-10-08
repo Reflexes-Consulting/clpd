@@ -1,6 +1,6 @@
 # clpd - Encrypted Clipboard History Manager
 
-[![Build and Release](https://github.com/AlexanderRussell/clpd/actions/workflows/build.yml/badge.svg)](https://github.com/AlexanderRussell/clpd/actions/workflows/build.yml)
+[![Build and Release](https://github.com/Reflexes-Consulting/clpd/actions/workflows/build.yml/badge.svg)](https://github.com/Reflexes-Consulting/clpd/actions/workflows/build.yml)
 
 A secure, local clipboard history manager written in Rust that encrypts all clipboard entries with a password-derived key.
 
@@ -17,7 +17,7 @@ A secure, local clipboard history manager written in Rust that encrypts all clip
 
 ### Option 1: Download Pre-built Binary (Recommended)
 
-Download the latest release for your platform from the [Releases page](https://github.com/AlexanderRussell/clpd/releases):
+Download the latest release for your platform from the [Releases page](https://github.com/Reflexes-Consulting/clpd/releases):
 
 - **Windows**: `clpd-windows-x86_64.exe`
 - **Linux**: `clpd-linux-x86_64`

@@ -1,235 +1,105 @@
-name: Build Win AMD x64
-
+name: Build, Test, and Release
 on:
-    push:
-        branches:
-            - main
-    workflow_dispatch:
-
+  push:
+    branches:
+      - main
+    tags:
+      - "v*.*.*"
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
 jobs:
-    build:
-        name: Build (Windows AMD64)
-        runs-on: self-hosted
+  test:
+    name: Run Tests
+    runs-on: self-hosted
 
-        steps:
-            - name: Checkout repository
-              uses: actions/checkout@v4
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-            - name: Set up Rust
-              uses: actions-rs/toolchain@v1
-              with:
-                  toolchain: stable
-                  profile: minimal
-                  override: true
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
 
-            - name: Build 'clpd' binary 'full' profile
-              run: cargo build --profile full --bin clpd
-              shell: cmd
+      - name: Run tests
+        run: cargo test --verbose
+        shell: cmd
 
-            #   - name: Sign 'Hype' executable
-            #     run: F:\codesign.exe localhost:7446 F:/Rust/target-shared/full/hype.exe
-            #     shell: cmd
+  build:
+    name: Build (Windows AMD64)
+    runs-on: self-hosted
+    needs: test
 
-            - name: Create artifacts and payload directories
-              run: mkdir artifacts && mkdir payload
-              shell: cmd
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-            - name: Copy signed 'clpd' executable to artifacts
-              run: copy F:\Rust\target-shared\full\clpd.exe artifacts\clpd.exe
-              shell: cmd
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
 
-            #   - name: Copy signed 'Hype' executable to payload
-            #     run: copy artifacts\hype.exe payload\
-            #     shell: cmd
+      - name: Build 'clpd' binary 'full' profile
+        run: cargo build --profile full --bin clpd
+        shell: cmd
+      - name: Create artifacts and payload directories
+        run: mkdir artifacts && mkdir payload
+        shell: cmd
 
-            #   - name: Copy License file to payload
-            #     run: copy LICENSE payload\
-            #     shell: cmd
+      - name: Copy signed 'clpd' executable to artifacts
+        run: copy F:\Rust\target-shared\full\clpd.exe artifacts\clpd.exe
+        shell: cmd
 
-            #   - name: Build 'Installer' binary 'full' profile
-            #     run: cargo build --profile full --bin installer
-            #     shell: cmd
+      - name: Upload 'clpd' artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: clpd.exe
+          path: artifacts/clpd.exe
 
-            #   - name: Sign 'Installer' executable
-            #     run: F:\codesign.exe localhost:7446 F:/Rust/target-shared/full/installer.exe
-            #     shell: cmd
+  release:
+    name: Create Release
+    runs-on: self-hosted
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: write
 
-            #   - name: Copy signed 'Installer' executable to artifacts
-            #     run: copy F:\Rust\target-shared\full\installer_signed.exe artifacts\installer.exe
-            #     shell: cmd
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-            - name: Upload 'clpd' artifact
-              uses: actions/upload-artifact@v4
-              with:
-                  name: clpd.exe
-                  path: artifacts/clpd.exe
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: clpd.exe
+          path: release/
 
-        #   - name: Upload 'Installer' artifact
-        #     uses: actions/upload-artifact@v4
-        #     with:
-        #       name: installer.exe
-        #   path: artifacts/installer.exe
-# name: Build and Release
+      - name: Get version from tag
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+        shell: bash
 
-# on:
-#     push:
-#         branches: [main]
-#         tags:
-#             - "v*"
-#     pull_request:
-#         branches: [main]
-#     workflow_dispatch:
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: Release ${{ steps.get_version.outputs.VERSION }}
+          body: |
+            ## clpd ${{ steps.get_version.outputs.VERSION }}
 
-# env:
-#     CARGO_TERM_COLOR: always
+            ### Installation
+            Download `clpd.exe` and place it in your PATH.
 
-# jobs:
-#     build:
-#         name: Build ${{ matrix.target }}
-#         runs-on: ${{ matrix.os }}
-#         strategy:
-#             fail-fast: false
-#             matrix:
-#                 include:
-#                     - os: windows-latest
-#                       target: x86_64-pc-windows-msvc
-#                       artifact_name: clpd.exe
-#                       asset_name: clpd-windows-x86_64.exe
-#                     - os: ubuntu-latest
-#                       target: x86_64-unknown-linux-gnu
-#                       artifact_name: clpd
-#                       asset_name: clpd-linux-x86_64
-
-#         steps:
-#             - name: Checkout code
-#               uses: actions/checkout@v4
-
-#             - name: Install Rust toolchain
-#               uses: dtolnay/rust-toolchain@stable
-#               with:
-#                   targets: ${{ matrix.target }}
-
-#             - name: Cache cargo registry
-#               uses: actions/cache@v4
-#               with:
-#                   path: ~/.cargo/registry
-#                   key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-
-#             - name: Cache cargo index
-#               uses: actions/cache@v4
-#               with:
-#                   path: ~/.cargo/git
-#                   key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
-
-#             - name: Cache target directory
-#               uses: actions/cache@v4
-#               with:
-#                   path: target
-#                   key: ${{ runner.os }}-${{ matrix.target }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
-
-#             - name: Install dependencies (Linux)
-#               if: matrix.os == 'ubuntu-latest'
-#               run: |
-#                   sudo apt-get update
-#                   sudo apt-get install -y libxcb-shape0-dev libxcb-xfixes0-dev
-
-#             - name: Build release binary
-#               run: cargo build --release --target ${{ matrix.target }}
-
-#             - name: Strip binary (Linux and macOS)
-#               if: matrix.os != 'windows-latest'
-#               run: strip target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
-
-#             - name: Rename binary
-#               shell: bash
-#               run: |
-#                   mkdir -p artifacts
-#                   if [ "${{ matrix.os }}" = "windows-latest" ]; then
-#                     cp target/${{ matrix.target }}/release/${{ matrix.artifact_name }} artifacts/${{ matrix.asset_name }}
-#                   else
-#                     cp target/${{ matrix.target }}/release/${{ matrix.artifact_name }} artifacts/${{ matrix.asset_name }}
-#                     chmod +x artifacts/${{ matrix.asset_name }}
-#                   fi
-
-#             - name: Upload artifact
-#               uses: actions/upload-artifact@v4
-#               with:
-#                   name: ${{ matrix.asset_name }}
-#                   path: artifacts/${{ matrix.asset_name }}
-#                   if-no-files-found: error
-
-#             - name: Calculate checksums
-#               shell: bash
-#               run: |
-#                   cd artifacts
-#                   if [ "${{ matrix.os }}" = "windows-latest" ]; then
-#                     certutil -hashfile ${{ matrix.asset_name }} SHA256 > ${{ matrix.asset_name }}.sha256
-#                   else
-#                     shasum -a 256 ${{ matrix.asset_name }} > ${{ matrix.asset_name }}.sha256
-#                   fi
-
-#             - name: Upload checksum
-#               uses: actions/upload-artifact@v4
-#               with:
-#                   name: ${{ matrix.asset_name }}.sha256
-#                   path: artifacts/${{ matrix.asset_name }}.sha256
-
-#     release:
-#         name: Create Release
-#         needs: build
-#         runs-on: ubuntu-latest
-#         if: startsWith(github.ref, 'refs/tags/v')
-#         permissions:
-#             contents: write
-
-#         steps:
-#             - name: Checkout code
-#               uses: actions/checkout@v4
-
-#             - name: Download all artifacts
-#               uses: actions/download-artifact@v4
-#               with:
-#                   path: artifacts
-
-#             - name: Display structure of downloaded files
-#               run: ls -R artifacts
-
-#             - name: Create Release
-#               uses: softprops/action-gh-release@v1
-#               with:
-#                   files: |
-#                       artifacts/**/*
-#                   draft: false
-#                   prerelease: false
-#                   generate_release_notes: true
-#               env:
-#                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-#     test:
-#         name: Run tests
-#         runs-on: ${{ matrix.os }}
-#         strategy:
-#             matrix:
-#                 os: [ubuntu-latest, windows-latest]
-
-#         steps:
-#             - name: Checkout code
-#               uses: actions/checkout@v4
-
-#             - name: Install Rust toolchain
-#               uses: dtolnay/rust-toolchain@stable
-
-#             - name: Install dependencies (Linux)
-#               if: matrix.os == 'ubuntu-latest'
-#               run: |
-#                   sudo apt-get update
-#                   sudo apt-get install -y libxcb-shape0-dev libxcb-xfixes0-dev
-
-#             - name: Run tests
-#               run: cargo test --verbose
-
-#             - name: Run clippy
-#               run: cargo clippy -- -D warnings
-
-#             - name: Check formatting
-#               run: cargo fmt -- --check
+            ### Changes
+            See the commit history for details.
+          files: |
+            release/clpd.exe
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
