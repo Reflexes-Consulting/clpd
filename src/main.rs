@@ -6,7 +6,9 @@ mod watcher;
 
 use anyhow::{Context, Result};
 use arboard::Clipboard;
+use std::fs;
 use std::io::{self, Write};
+use std::path::PathBuf;
 
 use cli::{Commands, parse_args};
 use crypto::{decrypt, derive_key, encrypt, generate_salt};
@@ -36,6 +38,7 @@ fn main() -> Result<()> {
         Commands::Delete { id, yes } => cmd_delete(db, &id, yes),
         Commands::Clear { yes } => cmd_clear(db, yes),
         Commands::Stats => cmd_stats(db),
+        Commands::Dump { directory, yes } => cmd_dump(db, directory, yes),
     }
 }
 
@@ -440,6 +443,167 @@ fn cmd_stats(db: ClipboardDatabase) -> Result<()> {
         "Newest entry: {}",
         newest.timestamp.format("%Y-%m-%d %H:%M:%S")
     );
+
+    Ok(())
+}
+
+/// Dump all entries to a directory
+fn cmd_dump(db: ClipboardDatabase, directory: PathBuf, yes: bool) -> Result<()> {
+    // Check if initialized
+    if !db.is_initialized()? {
+        anyhow::bail!("Database not initialized. Run 'clipd init' first.");
+    }
+
+    let entries = db.list_entries()?;
+
+    if entries.is_empty() {
+        println!("No entries to dump.");
+        return Ok(());
+    }
+
+    // Create directory if it doesn't exist
+    if directory.exists() {
+        if !yes {
+            print!(
+                "⚠ Directory '{}' already exists. Files may be overwritten. Continue? (y/N): ",
+                directory.display()
+            );
+            io::stdout().flush()?;
+
+            let mut response = String::new();
+            io::stdin().read_line(&mut response)?;
+
+            if !response.trim().eq_ignore_ascii_case("y") {
+                println!("Dump cancelled.");
+                return Ok(());
+            }
+        }
+    } else {
+        fs::create_dir_all(&directory).context("Failed to create output directory")?;
+    }
+
+    // Get password
+    let password = rpassword::prompt_password("Enter master password: ")?;
+
+    // Get salt and derive key
+    let salt = db.get_salt()?;
+    let key = derive_key(&password, &salt)?;
+
+    // Verify password
+    if !db.verify_password(&key)? {
+        anyhow::bail!("❌ Incorrect password!");
+    }
+
+    println!("✓ Password verified");
+    println!();
+    println!(
+        "📁 Dumping {} entries to '{}'",
+        entries.len(),
+        directory.display()
+    );
+    println!();
+
+    // Create CSV file for text entries
+    let csv_path = directory.join("clipboard_text_entries.csv");
+    let mut csv_writer = csv::Writer::from_path(&csv_path).context("Failed to create CSV file")?;
+
+    // Write CSV header
+    csv_writer.write_record(&["ID", "Timestamp", "Content"])?;
+
+    let mut text_count = 0;
+    let mut image_count = 0;
+    let mut errors = 0;
+
+    // Process each entry
+    for entry in entries.iter() {
+        // Decrypt entry
+        let plaintext = match decrypt(&key, &entry.payload) {
+            Ok(data) => data,
+            Err(e) => {
+                eprintln!("⚠ Failed to decrypt entry {}: {}", entry.id, e);
+                errors += 1;
+                continue;
+            }
+        };
+
+        match entry.content_type {
+            ClipboardContentType::Text => {
+                // Write to CSV
+                let text = String::from_utf8_lossy(&plaintext).to_string();
+                csv_writer.write_record(&[
+                    &entry.id,
+                    &entry.timestamp.format("%Y-%m-%d %H:%M:%S%.3f").to_string(),
+                    &text,
+                ])?;
+                text_count += 1;
+                print!(".");
+                io::stdout().flush()?;
+            }
+            ClipboardContentType::Image => {
+                // Deserialize image data
+                match bincode::deserialize::<ImageData>(&plaintext) {
+                    Ok(img_data) => {
+                        // Save as PNG
+                        let image_filename = format!(
+                            "image_{}_{}.png",
+                            entry.timestamp.format("%Y%m%d_%H%M%S"),
+                            &entry.id[entry.id.len().saturating_sub(8)..]
+                        );
+                        let image_path = directory.join(&image_filename);
+
+                        // Convert RGBA to PNG using image crate
+                        match image::RgbaImage::from_raw(
+                            img_data.width as u32,
+                            img_data.height as u32,
+                            img_data.bytes,
+                        ) {
+                            Some(img) => {
+                                if let Err(e) = img.save(&image_path) {
+                                    eprintln!("\n⚠ Failed to save image {}: {}", image_filename, e);
+                                    errors += 1;
+                                } else {
+                                    image_count += 1;
+                                    print!(".");
+                                    io::stdout().flush()?;
+                                }
+                            }
+                            None => {
+                                eprintln!(
+                                    "\n⚠ Failed to create image from data for entry {}",
+                                    entry.id
+                                );
+                                errors += 1;
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!(
+                            "\n⚠ Failed to deserialize image data for entry {}: {}",
+                            entry.id, e
+                        );
+                        errors += 1;
+                    }
+                }
+            }
+        }
+    }
+
+    csv_writer.flush()?;
+    println!();
+    println!();
+    println!("✓ Dump complete!");
+    println!();
+    println!("📊 Summary:");
+    println!(
+        "  - Text entries: {} (saved to {})",
+        text_count,
+        csv_path.display()
+    );
+    println!("  - Images: {} (saved as PNG files)", image_count);
+
+    if errors > 0 {
+        println!("  ⚠ Errors: {}", errors);
+    }
 
     Ok(())
 }

@@ -4,6 +4,7 @@ use std::path::PathBuf;
 #[derive(Parser)]
 #[command(name = "clpd")]
 #[command(about = "Encrypted clipboard history manager", long_about = None)]
+#[command(author = "Alexander Russell <alex@alexanderrussell.me>")]
 #[command(version)]
 pub struct Cli {
     /// Database path (defaults to ~/.local/share/clpd/db)
@@ -68,6 +69,16 @@ pub enum Commands {
 
     /// Show database statistics
     Stats,
+
+    /// Dump all entries to a directory (images as files, text as CSV)
+    Dump {
+        /// Directory path to dump entries to
+        directory: PathBuf,
+
+        /// Skip confirmation prompt
+        #[arg(short, long)]
+        yes: bool,
+    },
 }
 
 pub fn parse_args() -> Cli {

@@ -1,5 +1,7 @@
 # clpd - Encrypted Clipboard History Manager
 
+[![Build and Release](https://github.com/AlexanderRussell/clpd/actions/workflows/build.yml/badge.svg)](https://github.com/AlexanderRussell/clpd/actions/workflows/build.yml)
+
 A secure, local clipboard history manager written in Rust that encrypts all clipboard entries with a password-derived key.
 
 ## 🔐 Security Features
@@ -12,6 +14,21 @@ A secure, local clipboard history manager written in Rust that encrypts all clip
 - **Local Only**: No network access, all data stored locally
 
 ## 📦 Installation
+
+### Option 1: Download Pre-built Binary (Recommended)
+
+Download the latest release for your platform from the [Releases page](https://github.com/AlexanderRussell/clpd/releases):
+
+- **Windows**: `clpd-windows-x86_64.exe`
+- **Linux**: `clpd-linux-x86_64`
+
+Make the binary executable (Linux):
+
+```bash
+chmod +x clpd-linux-x86_64
+```
+
+### Option 2: Build from Source
 
 ```bash
 cargo build --release
@@ -131,6 +148,36 @@ Show database statistics:
 ```bash
 clpd stats
 ```
+
+### 8. Dump All Entries
+
+Export all clipboard entries to a directory:
+
+```bash
+# Windows
+.\clpd.exe dump <directory-path>
+
+# Linux/macOS
+clpd dump <directory-path>
+```
+
+This will:
+
+- Create a CSV file (`clipboard_text_entries.csv`) containing all text entries with ID, timestamp, and content
+- Save all images as PNG files with timestamped filenames (e.g., `image_20251008_143052_12345678.png`)
+- Prompt for your master password to decrypt all entries
+
+Example:
+
+```bash
+# Export to a folder called "clipboard_export"
+.\clpd.exe dump clipboard_export
+
+# Skip confirmation if directory exists
+.\clpd.exe dump clipboard_export --yes
+```
+
+**Note**: This creates an unencrypted backup of your clipboard history. Store the exported directory securely!
 
 ## 📁 Database Location
 
@@ -263,16 +310,14 @@ Newest entry: 2025-10-08 14:23:45
 
 ### Current Limitations
 
-- Image support is partial (encryption/storage works, but copying back needs work)
 - Watcher runs in foreground only
 - No GUI or TUI (CLI only)
 - No search/filter functionality
-- No export/import feature
 - No sync between machines
+- Export is unencrypted (dump command creates plaintext files)
 
 ### Potential Enhancements
 
-- ✨ Full image clipboard support
 - ✨ TUI with ratatui for better browsing
 - ✨ Search and filter by content, date, or type
 - ✨ Encrypted export/import for backups
@@ -282,9 +327,46 @@ Newest entry: 2025-10-08 14:23:45
 - ✨ Favorite/pin entries
 - ✨ Tags and categories
 
-## 📝 License
+### ✅ Recently Implemented
 
-This project is provided as-is for educational and personal use.
+- ✅ Full image clipboard support (capture and restore)
+- ✅ Export functionality via `dump` command
+
+## � Development
+
+### Building
+
+```bash
+cargo build --release
+```
+
+### Running Tests
+
+```bash
+cargo test
+```
+
+### Continuous Integration
+
+The project uses GitHub Actions for CI/CD:
+
+- **Automated builds** for Windows and Linux
+- **Automated testing** on both platforms
+- **Code quality checks** with clippy and rustfmt
+- **Release automation** - creates GitHub releases with binaries when tags are pushed
+
+To create a new release:
+
+```bash
+git tag v0.2.0
+git push origin v0.2.0
+```
+
+Binaries and checksums will be automatically built and attached to the GitHub release.
+
+## �📝 License
+
+This project is provided as-is for educational and personal use, and uses the BSD 2 Clause license.
 
 ## 🤝 Contributing
 
