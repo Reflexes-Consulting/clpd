@@ -122,9 +122,10 @@ impl ClipboardWatcher {
     pub fn check_clipboard(&mut self) -> Result<bool> {
         // Try to get text first
         if let Ok(text) = self.clipboard.get_text()
-            && !text.is_empty() {
-                return self.process_text(&text);
-            }
+            && !text.is_empty()
+        {
+            return self.process_text(&text);
+        }
 
         // Try to get image if no text
         if let Ok(image) = self.clipboard.get_image() {

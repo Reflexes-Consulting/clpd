@@ -19,8 +19,8 @@ debug = true
 opt-level = 3
 debug = true
 # setting the test opt to maximum, tweak this if needed
-[profile.test]
-opt-level = 3
+# [profile.test]
+# opt-level = 3
 
 [dependencies]
 sled = "0.34"
