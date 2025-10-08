@@ -1,0 +1,43 @@
+[package]
+name = "clpd"
+version = "0.1.0"
+edition = "2024"
+
+[profile.full]
+inherits = "release"
+strip = true
+codegen-units = 1
+lto = "fat"
+overflow-checks = true
+
+[profile.dev]
+opt-level = 0
+debug = true
+# dev profile for _other_ packages are optimized,
+# comment this out if needing to debug _other_ packages
+[profile.dev.package."*"]
+opt-level = 3
+debug = true
+# setting the test opt to maximum, tweak this if needed
+[profile.test]
+opt-level = 3
+
+[dependencies]
+sled = "0.34"
+argon2 = "0.5"
+chacha20poly1305 = "0.10"
+rand = "0.8"
+arboard = "3.4"
+serde = { version = "1.0", features = ["derive"] }
+bincode = "1.3"
+chrono = { version = "0.4", features = ["serde"] }
+anyhow = "1.0"
+zeroize = "1.8"
+clap = { version = "4.5", features = ["derive"] }
+sha2 = "0.10"
+rpassword = "7.3"
+hex = "0.4"
+dirs = "5.0"
+
+[dev-dependencies]
+tempfile = "3.8"
