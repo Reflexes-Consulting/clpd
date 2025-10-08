@@ -508,7 +508,7 @@ fn cmd_dump(db: ClipboardDatabase, directory: PathBuf, yes: bool) -> Result<()> 
     let mut csv_writer = csv::Writer::from_path(&csv_path).context("Failed to create CSV file")?;
 
     // Write CSV header
-    csv_writer.write_record(&["ID", "Timestamp", "Content"])?;
+    csv_writer.write_record(["ID", "Timestamp", "Content"])?;
 
     let mut text_count = 0;
     let mut image_count = 0;
@@ -530,7 +530,7 @@ fn cmd_dump(db: ClipboardDatabase, directory: PathBuf, yes: bool) -> Result<()> 
             ClipboardContentType::Text => {
                 // Write to CSV
                 let text = String::from_utf8_lossy(&plaintext).to_string();
-                csv_writer.write_record(&[
+                csv_writer.write_record([
                     &entry.id,
                     &entry.timestamp.format("%Y-%m-%d %H:%M:%S%.3f").to_string(),
                     &text,
