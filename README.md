@@ -89,9 +89,36 @@ Optional: Limit the maximum number of stored entries:
 clpd start --max-entries 1000
 ```
 
-### 3. List Clipboard History
+### 3. Browse with Interactive TUI
 
-View your clipboard history:
+Launch the interactive Terminal User Interface for easy browsing:
+
+```bash
+clpd browse
+```
+
+**TUI Features:**
+
+- 📋 **Split-pane interface**: List of entries on the left, live preview on the right
+- 🖼️ **Image preview**: See images rendered with colored block characters
+- ⌨️ **Keyboard navigation**: Vim-style (`j`/`k`) or arrow keys
+- 📊 **Live status**: Real-time feedback for copy, delete, and open operations
+- 🎨 **Rich preview**: Text wrapping and syntax-highlighted display
+
+**TUI Controls:**
+
+- `↑`/`↓` or `j`/`k` - Navigate entries
+- `Enter` or `c` - Copy selected entry to clipboard
+- `o` - Open entry in default application (creates temp file)
+- `d` - Delete selected entry
+- `r` - Refresh entry list
+- `Home`/`End` - Jump to first/last entry
+- `PgUp`/`PgDn` - Jump 10 entries at a time
+- `q` or `Esc` - Quit TUI
+
+### 4. List Clipboard History (CLI)
+
+View your clipboard history from the command line:
 
 ```bash
 clpd list
@@ -109,7 +136,7 @@ Limit the number of entries shown:
 clpd list --limit 10
 ```
 
-### 4. Show Entry Content
+### 5. Show Entry Content
 
 Decrypt and display a specific entry:
 
@@ -117,7 +144,7 @@ Decrypt and display a specific entry:
 clpd show <entry-id>
 ```
 
-### 5. Copy Entry to Clipboard
+### 6. Copy Entry to Clipboard
 
 Restore an entry to your clipboard:
 
@@ -125,7 +152,7 @@ Restore an entry to your clipboard:
 clpd copy <entry-id>
 ```
 
-### 6. Delete Entries
+### 7. Delete Entries
 
 Delete a specific entry:
 
@@ -141,7 +168,7 @@ clpd clear
 
 Use `-y` or `--yes` to skip confirmation prompts.
 
-### 7. View Statistics
+### 8. View Statistics
 
 Show database statistics:
 
@@ -149,7 +176,15 @@ Show database statistics:
 clpd stats
 ```
 
-### 8. Dump All Entries
+### 8. View Statistics
+
+Show database statistics:
+
+```bash
+clpd stats
+```
+
+### 9. Dump All Entries
 
 Export all clipboard entries to a directory:
 
@@ -311,28 +346,30 @@ Newest entry: 2025-10-08 14:23:45
 ### Current Limitations
 
 - Watcher runs in foreground only
-- No GUI or TUI (CLI only)
-- No search/filter functionality
+- No search/filter functionality in CLI (TUI navigation only)
 - No sync between machines
 - Export is unencrypted (dump command creates plaintext files)
 
-### Potential Enhancements
+### Recently Implemented ✅
 
-- ✨ TUI with ratatui for better browsing
-- ✨ Search and filter by content, date, or type
+- ✅ **Interactive TUI** with ratatui for easy browsing
+- ✅ **Image preview** in TUI using colored block characters with RGB
+- ✅ **Full image support** (capture and restore from clipboard)
+- ✅ **Export functionality** via `dump` command
+- ✅ **Open in external app** feature for quick viewing
+
+### Potential Future Enhancements
+
+- ✨ Search and filter within TUI
 - ✨ Encrypted export/import for backups
 - ✨ Auto-lock after inactivity
 - ✨ Configurable Argon2 parameters
 - ✨ Background daemon mode
 - ✨ Favorite/pin entries
 - ✨ Tags and categories
+- ✨ Configurable TUI color themes
 
-### ✅ Recently Implemented
-
-- ✅ Full image clipboard support (capture and restore)
-- ✅ Export functionality via `dump` command
-
-## � Development
+## 📚 Development
 
 ### Building
 

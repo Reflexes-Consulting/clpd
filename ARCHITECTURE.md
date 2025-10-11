@@ -12,6 +12,7 @@ clpd/
 ├── Cargo.lock          # Locked dependency versions
 ├── README.md           # Main documentation
 ├── USAGE.md            # User guide and command reference
+├── RELEASE.md          # Release creation guide
 ├── .gitignore          # Git ignore patterns
 ├── clpd.exe            # Compiled executable (Windows)
 └── src/
@@ -20,6 +21,7 @@ clpd/
     ├── crypto.rs       # Cryptographic operations (encryption, key derivation)
     ├── database.rs     # Database operations (sled wrapper)
     ├── models.rs       # Data structures (ClipboardEntry, etc.)
+    ├── tui.rs          # Terminal User Interface (ratatui)
     └── watcher.rs      # Clipboard monitoring daemon
 ```
 
@@ -34,12 +36,14 @@ clpd/
 - `main()` - Parse CLI args and route to command handlers
 - `cmd_init()` - Initialize database with master password
 - `cmd_start()` - Start clipboard watcher daemon
+- `cmd_browse()` - Launch interactive TUI browser
 - `cmd_list()` - List stored entries
 - `cmd_show()` - Decrypt and display entry
 - `cmd_copy()` - Copy entry back to clipboard
 - `cmd_delete()` - Delete specific entry
 - `cmd_clear()` - Delete all entries
 - `cmd_stats()` - Show database statistics
+- `cmd_dump()` - Export all entries to files
 
 **Dependencies**: All other modules
 
@@ -53,8 +57,83 @@ clpd/
 
 - `Cli` - Main CLI struct with global options
 - `Commands` - Enum of all available commands
+  - `Init` - Initialize database
+  - `Start` - Start watcher daemon
+  - `Browse` - Launch TUI browser
+  - `List` - List entries
+  - `Show` - Display entry
+  - `Copy` - Copy to clipboard
+  - `Delete` - Remove entry
+  - `Clear` - Remove all entries
+  - `Stats` - Show statistics
+  - `Dump` - Export entries
 
 **Technology**: Uses `clap` with derive macros for argument parsing
+
+---
+
+### `tui.rs`
+
+**Purpose**: Terminal User Interface for browsing clipboard history
+
+**Structure**: `App`
+
+**Key Components**:
+
+- `App` - TUI application state
+  - `entries`: Cached list of clipboard entries
+  - `list_state`: Current selection in the list
+  - `message`: Status message display
+  - `message_time`: Timestamp for auto-clearing messages
+  - `db`: Database connection
+  - `key`: Master encryption key
+
+**Key Methods**:
+
+- `new()` - Create new TUI app instance
+- `handle_key()` - Process keyboard input
+- `next()/previous()` - Navigate entry list
+- `delete_selected()` - Delete current entry
+- `copy_selected()` - Copy entry to clipboard
+- `open_selected()` - Open entry in external app
+- `refresh()` - Reload entries from database
+- `render_preview_text()` - Generate text preview
+- `get_image_data()` - Extract image data for display
+
+**Rendering Functions**:
+
+- `ui()` - Main layout (list, preview, status, controls)
+- `render_entry_list()` - Render scrollable entry list
+- `render_preview()` - Render entry preview with images
+- `render_status_bar()` - Show status messages
+- `render_controls_bar()` - Display keyboard shortcuts
+- `create_image_preview()` - Generate colored block image preview
+
+**Features**:
+
+- Split-pane interface (15% list, 85% preview)
+- Live decryption and preview
+- Image display using half-block characters (▀) with RGB colors
+- Keyboard navigation (vim-style + arrow keys)
+- Status messages with 3-second auto-clear
+- Temporary file creation for opening entries
+
+**Controls**:
+
+- `↑`/`↓` or `j`/`k` - Navigate
+- `Enter` or `c` - Copy to clipboard
+- `o` - Open in default app
+- `d` - Delete entry
+- `r` - Refresh list
+- `Home`/`End` - Jump to first/last
+- `PgUp`/`PgDn` - Jump 10 entries
+- `q` or `Esc` - Quit
+
+**Technology**:
+
+- Uses `ratatui` for TUI rendering
+- Uses `crossterm` for terminal control
+- Colored block image rendering with RGB support
 
 ---
 
@@ -301,6 +380,11 @@ Display plaintext to user
 | `rpassword`        | 7.3     | Secure password input    |
 | `hex`              | 0.4     | Hex encoding             |
 | `dirs`             | 5.0     | OS directory paths       |
+| `csv`              | 1.3     | CSV export               |
+| `image`            | 0.25    | Image processing         |
+| `ratatui`          | 0.29    | Terminal UI framework    |
+| `crossterm`        | 0.28    | Terminal manipulation    |
+| `termimage`        | 1.2     | Terminal image display   |
 
 ### Dev Dependencies
 
@@ -410,12 +494,22 @@ All encryption logic is isolated in `crypto.rs`. To change algorithms:
 
 ## Future Enhancements
 
-See README.md for detailed list of planned features:
+See README.md for detailed list of planned features.
 
-- Full image support
-- TUI with ratatui
-- Search and filtering
-- Export/import
+### ✅ Recently Implemented
+
+- ✅ Full image support (capture, display, restore)
+- ✅ Interactive TUI with ratatui
+- ✅ Image preview using colored block characters
+- ✅ Export functionality via `dump` command
+- ✅ Open entries in external applications
+- ✅ Half-block character rendering for 2x vertical resolution
+
+### 🚧 Potential Future Enhancements
+
+- Search and filtering within TUI
+- Configurable TUI color themes
+- Clipboard format detection improvements
 - Background daemon mode
 - And more...
 

@@ -36,6 +36,45 @@ Initialize or reinitialize the database with a master password.
 
 ---
 
+### `.\clpd.exe browse`
+
+Launch the interactive Terminal User Interface (TUI) for browsing clipboard history.
+
+**Features:**
+
+- Split-pane interface with entry list and live preview
+- Image preview using colored block characters
+- Real-time decryption and display
+- Keyboard-driven navigation
+
+**Controls:**
+
+| Key                | Action                            |
+| ------------------ | --------------------------------- |
+| `↑`/`↓` or `j`/`k` | Navigate up/down through entries  |
+| `Enter` or `c`     | Copy selected entry to clipboard  |
+| `o`                | Open entry in default application |
+| `d`                | Delete selected entry             |
+| `r`                | Refresh entry list                |
+| `Home`/`End`       | Jump to first/last entry          |
+| `PgUp`/`PgDn`      | Jump 10 entries                   |
+| `q` or `Esc`       | Quit TUI                          |
+
+**Example:**
+
+```bash
+.\clpd.exe browse
+```
+
+**Notes:**
+
+- You'll be prompted for your master password on launch
+- Images are displayed using colored blocks (requires RGB terminal support)
+- Status messages appear at the bottom for 3 seconds
+- The "Open" feature creates temporary files in your system temp directory
+
+---
+
 ### `.\clpd.exe start [OPTIONS]`
 
 Start the clipboard watcher daemon.
@@ -172,6 +211,29 @@ Use a custom database location (default: `%LOCALAPPDATA%\clpd\db`).
 
 ## Tips and Tricks
 
+### Interactive Browsing
+
+The TUI is the easiest way to browse your clipboard history:
+
+```bash
+.\clpd.exe browse
+```
+
+**Workflow:**
+
+1. Launch TUI with `browse` command
+2. Use `j`/`k` or arrow keys to navigate
+3. Preview appears automatically on the right
+4. Press `Enter` to copy, `o` to open, or `d` to delete
+5. Press `q` to exit
+
+**Image Preview:**
+
+- Images are rendered using colored block characters
+- Requires a terminal with RGB color support (Windows Terminal, iTerm2, Alacritty, etc.)
+- Large images are automatically downsampled to fit the preview pane
+- Half-block characters (▀) provide 2x vertical resolution
+
 ### Running in Background (Windows)
 
 Since the watcher runs in the foreground, you can use Windows Task Scheduler or run it in a separate terminal window.
@@ -200,10 +262,20 @@ Get-Job | Receive-Job
 
 2. **During the Day:**
 
-   - Copy text, links, code snippets normally
-   - Everything is automatically saved
+   - Copy text, links, code snippets, images normally
+   - Everything is automatically saved and encrypted
 
-3. **Finding Old Content:**
+3. **Browsing Your History:**
+
+   **Option A - Interactive TUI (Recommended):**
+
+   ```bash
+   .\clpd.exe browse
+   ```
+
+   Navigate with keyboard, preview in real-time, copy or open with a keypress.
+
+   **Option B - Command Line:**
 
    ```bash
    # See recent items
