@@ -79,6 +79,9 @@ pub enum Commands {
         #[arg(short, long)]
         yes: bool,
     },
+
+    /// Browse clipboard history with an interactive TUI
+    Browse,
 }
 
 pub fn parse_args() -> Cli {

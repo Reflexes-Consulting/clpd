@@ -59,6 +59,8 @@ impl ClipboardDatabase {
     /// Initialize the database with a salt and payload
     pub fn initialize(&self, salt: &[u8], payload: &[u8]) -> Result<()> {
         self.meta_tree.insert(SALT_KEY, salt)?;
+        // while `sled` prefers big endian when needing ordering, here we just need a fixed
+        // representation, so little endian is fine
         self.meta_tree.insert(VERSION_KEY, &1u32.to_le_bytes())?;
         self.meta_tree.insert(PAYLOAD_KEY, payload)?;
         self.meta_tree.flush()?;

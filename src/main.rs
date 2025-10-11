@@ -2,6 +2,7 @@ mod cli;
 mod crypto;
 mod database;
 mod models;
+mod tui;
 mod watcher;
 
 use anyhow::{Context, Result};
@@ -30,16 +31,23 @@ fn main() -> Result<()> {
 
     // Handle commands
     match args.command {
-        Commands::Init => cmd_init(db),
-        Commands::Start { max_entries } => cmd_start(db, max_entries),
-        Commands::List { verbose, limit } => cmd_list(db, verbose, limit),
-        Commands::Show { id } => cmd_show(db, &id),
-        Commands::Copy { id } => cmd_copy(db, &id),
-        Commands::Delete { id, yes } => cmd_delete(db, &id, yes),
-        Commands::Clear { yes } => cmd_clear(db, yes),
-        Commands::Stats => cmd_stats(db),
-        Commands::Dump { directory, yes } => cmd_dump(db, directory, yes),
-    }
+        Commands::Init => cmd_init(db)?,
+        Commands::Start { max_entries } => cmd_start(db, max_entries)?,
+        Commands::List { verbose, limit } => cmd_list(db, verbose, limit)?,
+        Commands::Show { id } => cmd_show(db, &id)?,
+        Commands::Copy { id } => cmd_copy(db, &id)?,
+        Commands::Delete { id, yes } => cmd_delete(db, &id, yes)?,
+        Commands::Clear { yes } => cmd_clear(db, yes)?,
+        Commands::Stats => cmd_stats(db)?,
+        Commands::Dump { directory, yes } => cmd_dump(db, directory, yes)?,
+        Commands::Browse => cmd_browse(db)?,
+    };
+    // Clean up by deleting any temporary files if needed
+    let temp_dir = std::env::temp_dir().join("clpd_temp");
+    if temp_dir.exists() {
+        fs::remove_dir_all(&temp_dir).context("Failed to clean up temporary files")?;
+    };
+    Ok(())
 }
 
 /// Initialize the database
@@ -604,6 +612,31 @@ fn cmd_dump(db: ClipboardDatabase, directory: PathBuf, yes: bool) -> Result<()> 
     if errors > 0 {
         println!("  ⚠ Errors: {}", errors);
     }
+
+    Ok(())
+}
+
+/// Browse clipboard history with interactive TUI
+fn cmd_browse(db: ClipboardDatabase) -> Result<()> {
+    // Check if initialized
+    if !db.is_initialized()? {
+        anyhow::bail!("Database not initialized. Run 'clpd init' first.");
+    }
+
+    // Get password
+    let password = rpassword::prompt_password("Enter master password: ")?;
+
+    // Get salt and derive key
+    let salt = db.get_salt()?;
+    let key = derive_key(&password, &salt)?;
+
+    // Verify password
+    if !db.verify_password(&key)? {
+        anyhow::bail!("❌ Incorrect password!");
+    }
+
+    // Run TUI
+    tui::run(db, key)?;
 
     Ok(())
 }
