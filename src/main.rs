@@ -20,6 +20,11 @@ use watcher::start_watcher;
 fn main() -> Result<()> {
     let args = parse_args();
 
+    // Handle install command separately (doesn't need database)
+    if matches!(args.command, Commands::Install) {
+        return cmd_install();
+    }
+
     // Get database path
     let db_path = match args.database {
         Some(path) => path,
@@ -41,6 +46,7 @@ fn main() -> Result<()> {
         Commands::Stats => cmd_stats(db)?,
         Commands::Dump { directory, yes } => cmd_dump(db, directory, yes)?,
         Commands::Browse => cmd_browse(db)?,
+        Commands::Install => unreachable!(), // Handled above
     };
     // Clean up by deleting any temporary files if needed
     let temp_dir = std::env::temp_dir().join("clpd_temp");
@@ -637,6 +643,174 @@ fn cmd_browse(db: ClipboardDatabase) -> Result<()> {
 
     // Run TUI
     tui::run(db, key)?;
+
+    Ok(())
+}
+
+/// Install clpd binary to default location and add to PATH
+fn cmd_install() -> Result<()> {
+    println!("🔧 Installing clpd...");
+    println!();
+
+    // Get the current executable path
+    let current_exe = std::env::current_exe().context("Failed to get current executable path")?;
+
+    println!("📍 Current executable: {}", current_exe.display());
+
+    // Get the default database directory
+    let install_dir = dirs::data_local_dir()
+        .ok_or_else(|| anyhow::anyhow!("Failed to determine local data directory"))?
+        .join("clpd");
+
+    // Create install directory if it doesn't exist
+    fs::create_dir_all(&install_dir).context("Failed to create installation directory")?;
+
+    // Target path for the binary
+    let binary_name = if cfg!(windows) { "clpd.exe" } else { "clpd" };
+    let target_path = install_dir.join(binary_name);
+
+    println!("📂 Install directory: {}", install_dir.display());
+    println!();
+
+    // Copy the binary
+    if target_path.exists() {
+        print!(
+            "⚠️  clpd is already installed at {}. Overwrite? (y/N): ",
+            target_path.display()
+        );
+        io::stdout().flush()?;
+
+        let mut response = String::new();
+        io::stdin().read_line(&mut response)?;
+
+        if !response.trim().eq_ignore_ascii_case("y") {
+            println!("Installation cancelled.");
+            return Ok(());
+        }
+    }
+
+    fs::copy(&current_exe, &target_path)
+        .context("Failed to copy binary to installation directory")?;
+
+    println!("✓ Binary copied to: {}", target_path.display());
+    println!();
+
+    // Add to PATH
+    #[cfg(target_os = "windows")]
+    {
+        use std::process::Command;
+
+        println!("🔧 Adding to Windows PATH...");
+        println!();
+
+        let install_dir_str = install_dir.to_string_lossy().to_string();
+
+        // Check if already in PATH
+        let already_in_path = if let Ok(path_var) = std::env::var("PATH") {
+            path_var.split(';').any(|p| p == install_dir_str.as_str())
+        } else {
+            false
+        };
+
+        if already_in_path {
+            println!("✓ Directory already in PATH");
+        } else {
+            // Check if running as administrator
+            let is_admin = Command::new("net")
+                .args(&["session"])
+                .output()
+                .map(|output| output.status.success())
+                .unwrap_or(false);
+
+            if is_admin {
+                println!("🔓 Running as Administrator - adding to PATH automatically...");
+
+                // Get current user PATH
+                let output = Command::new("powershell")
+                    .args(&[
+                        "-NoProfile",
+                        "-Command",
+                        "[Environment]::GetEnvironmentVariable('Path', 'User')",
+                    ])
+                    .output()
+                    .context("Failed to get current PATH")?;
+
+                let current_path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+
+                // Add install directory to PATH if not empty
+                let new_path = if current_path.is_empty() {
+                    install_dir_str.clone()
+                } else {
+                    format!("{};{}", current_path, install_dir_str)
+                };
+
+                // Set the new PATH
+                let status = Command::new("powershell")
+                    .args(&[
+                        "-NoProfile",
+                        "-Command",
+                        &format!(
+                            "[Environment]::SetEnvironmentVariable('Path', '{}', 'User')",
+                            new_path.replace("'", "''")
+                        ),
+                    ])
+                    .status()
+                    .context("Failed to set PATH")?;
+
+                if status.success() {
+                    println!("✓ Successfully added to PATH!");
+                    println!();
+                    println!(
+                        "⚠️  You may need to restart your terminal for the changes to take effect."
+                    );
+                } else {
+                    anyhow::bail!("Failed to update PATH environment variable");
+                }
+            } else {
+                println!("⚠️  Not running as Administrator!");
+                println!();
+                println!("To automatically add clpd to your PATH, please run:");
+                println!();
+                println!("  clpd install");
+                println!();
+                println!("in an Administrator PowerShell/Command Prompt.");
+                println!();
+                println!("Or manually run this command in PowerShell (as Administrator):");
+                println!();
+                println!(
+                    "  [Environment]::SetEnvironmentVariable('Path', $env:Path + ';{}', [EnvironmentVariableTarget]::User)",
+                    install_dir_str
+                );
+            }
+        }
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        println!("🔧 Adding to PATH...");
+        println!();
+
+        let install_dir_str = install_dir.to_string_lossy();
+        let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".to_string());
+
+        let rc_file = if shell.contains("zsh") {
+            "~/.zshrc"
+        } else if shell.contains("fish") {
+            "~/.config/fish/config.fish"
+        } else {
+            "~/.bashrc"
+        };
+
+        println!("Add this line to your {}:", rc_file);
+        println!();
+        println!("  export PATH=\"$PATH:{}\"", install_dir_str);
+        println!();
+        println!("Then run: source {}", rc_file);
+    }
+
+    println!();
+    println!("✨ Installation complete!");
+    println!("   Run 'clpd init' to set up your encrypted clipboard database.");
 
     Ok(())
 }

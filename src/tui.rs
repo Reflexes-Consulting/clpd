@@ -359,9 +359,9 @@ impl App {
     }
 
     fn clear_old_message(&mut self) {
-        // Clear message after 3 seconds
+        // Clear message after 10 seconds
         if let Some(time) = self.message_time {
-            if time.elapsed() > std::time::Duration::from_secs(3) {
+            if time.elapsed() > std::time::Duration::from_secs(10) {
                 self.message = None;
                 self.message_time = None;
             }

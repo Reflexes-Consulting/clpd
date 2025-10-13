@@ -82,6 +82,9 @@ pub enum Commands {
 
     /// Browse clipboard history with an interactive TUI
     Browse,
+
+    /// Install clpd binary to default location and add to PATH
+    Install,
 }
 
 pub fn parse_args() -> Cli {
