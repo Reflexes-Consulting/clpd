@@ -15,24 +15,28 @@ use ratatui::{
 use std::io;
 use std::time::Instant;
 
-use crate::crypto::{MasterKey, decrypt};
 use crate::database::ClipboardDatabase;
 use crate::models::{ClipboardContentType, ClipboardEntry, ImageData};
+use crate::{
+    crypto::{MasterKey, decrypt},
+    database::ClipboardType,
+};
 
 /// TUI Application State
 pub struct App {
     entries: Vec<ClipboardEntry>,
     list_state: ListState,
     should_quit: bool,
-    db: ClipboardDatabase,
+    // db: ClipboardDatabase,
+    db: ClipboardType,
     key: MasterKey,
     message: Option<String>,
     message_time: Option<Instant>,
 }
 
 impl App {
-    pub fn new(db: ClipboardDatabase, key: MasterKey) -> Result<Self> {
-        let entries = db.list_entries()?;
+    pub async fn new(db: ClipboardType, key: MasterKey) -> Result<Self> {
+        let entries = db.list_entries().await?;
         let mut list_state = ListState::default();
         if !entries.is_empty() {
             list_state.select(Some(0));
@@ -50,7 +54,7 @@ impl App {
     }
 
     /// Handle key events
-    pub fn handle_key(&mut self, key: KeyEvent) -> Result<()> {
+    pub async fn handle_key(&mut self, key: KeyEvent) -> Result<()> {
         if key.kind != KeyEventKind::Press {
             return Ok(());
         }
@@ -66,7 +70,7 @@ impl App {
                 self.previous();
             }
             KeyCode::Char('d') | KeyCode::Delete => {
-                self.delete_selected()?;
+                self.delete_selected().await?;
             }
             KeyCode::Char('c') | KeyCode::Enter => {
                 self.copy_selected()?;
@@ -75,7 +79,7 @@ impl App {
                 self.open_selected()?;
             }
             KeyCode::Char('r') => {
-                self.refresh()?;
+                self.refresh().await?;
             }
             KeyCode::Home => {
                 self.select_first();
@@ -163,11 +167,11 @@ impl App {
         self.list_state.select(Some(i));
     }
 
-    fn delete_selected(&mut self) -> Result<()> {
+    async fn delete_selected(&mut self) -> Result<()> {
         if let Some(index) = self.list_state.selected() {
             if index < self.entries.len() {
                 let entry = &self.entries[index];
-                self.db.delete_entry(&entry.id)?;
+                self.db.delete_entry(&entry.id).await?;
                 self.entries.remove(index);
 
                 // Adjust selection
@@ -331,8 +335,8 @@ impl App {
         Ok(())
     }
 
-    fn refresh(&mut self) -> Result<()> {
-        self.entries = self.db.list_entries()?;
+    async fn refresh(&mut self) -> Result<()> {
+        self.entries = self.db.list_entries().await?;
 
         // Adjust selection if needed
         if self.entries.is_empty() {
@@ -414,7 +418,7 @@ impl App {
 }
 
 /// Run the TUI
-pub fn run(db: ClipboardDatabase, key: MasterKey) -> Result<()> {
+pub async fn run(db: ClipboardType, key: MasterKey) -> Result<()> {
     // Setup terminal
     enable_raw_mode()?;
     let mut stdout = io::stdout();
@@ -423,10 +427,10 @@ pub fn run(db: ClipboardDatabase, key: MasterKey) -> Result<()> {
     let mut terminal = Terminal::new(backend)?;
 
     // Create app
-    let mut app = App::new(db, key)?;
+    let mut app = App::new(db, key).await?;
 
     // Main loop
-    let res = run_app(&mut terminal, &mut app);
+    let res = run_app(&mut terminal, &mut app).await;
 
     // Restore terminal
     disable_raw_mode()?;
@@ -440,7 +444,10 @@ pub fn run(db: ClipboardDatabase, key: MasterKey) -> Result<()> {
     Ok(())
 }
 
-fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>, app: &mut App) -> Result<()> {
+async fn run_app<B: ratatui::backend::Backend>(
+    terminal: &mut Terminal<B>,
+    app: &mut App,
+) -> Result<()> {
     loop {
         // Clear old messages
         app.clear_old_message();
@@ -449,7 +456,7 @@ fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>, app: &mut A
 
         if event::poll(std::time::Duration::from_millis(100))? {
             if let Event::Key(key) = event::read()? {
-                app.handle_key(key)?;
+                app.handle_key(key).await?;
             }
         }
 

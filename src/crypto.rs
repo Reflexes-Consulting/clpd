@@ -7,10 +7,40 @@ use chacha20poly1305::{
     XChaCha20Poly1305, XNonce,
     aead::{Aead, KeyInit, OsRng},
 };
+use flate2::Compression;
+use flate2::read::ZlibDecoder;
+use flate2::write::ZlibEncoder;
 use rand::RngCore;
+
+use std::io::{Read, Write};
 use zeroize::Zeroize;
 
+/// Compresses the given byte slice using zlib compression algorithm and returns the compressed data as a new byte vector.
+pub fn compress(data: &[u8]) -> Vec<u8> {
+    let mut e = ZlibEncoder::new(Vec::new(), Compression::default());
+    e.write_all(data).unwrap();
+    e.finish().unwrap()
+}
+
+/// Compresses the given byte slice using zlib compression algorithm, at the desired compression level,
+/// and returns the compressed data as a new byte vector.
+/// The compression level must be in the range of 0 (no compression) to 9 (highest compression).
+pub fn compress_with_level(data: &[u8], level: u32) -> Vec<u8> {
+    let mut e = ZlibEncoder::new(Vec::new(), Compression::new(level));
+    e.write_all(data).unwrap();
+    e.finish().unwrap()
+}
+
+/// Tries to decompress the given byte slice using zlib compression algorithm and returns the decompressed data as a new byte vector.
+pub fn decompress(data: &[u8]) -> Result<Vec<u8>, std::io::Error> {
+    let mut decoder = ZlibDecoder::new(data);
+    let mut buffer = Vec::new();
+    decoder.read_to_end(&mut buffer)?;
+    Ok(buffer)
+}
+
 /// A wrapper around the master key that ensures it's wiped from memory when dropped
+#[derive(Clone)]
 pub struct MasterKey([u8; 32]);
 
 impl Drop for MasterKey {
@@ -27,6 +57,16 @@ impl MasterKey {
     #[allow(dead_code)]
     pub fn from_bytes(bytes: [u8; 32]) -> Self {
         Self(bytes)
+    }
+
+    pub fn hash(&self) -> [u8; 32] {
+        use sha2::{Digest, Sha256};
+        let mut hasher = Sha256::new();
+        hasher.update(&self.0);
+        let result = hasher.finalize();
+        let mut hash = [0u8; 32];
+        hash.copy_from_slice(&result);
+        hash
     }
 }
 

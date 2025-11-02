@@ -1,15 +1,17 @@
 mod cli;
 mod crypto;
 mod database;
+mod middleware;
 mod models;
 mod tui;
 mod watcher;
-
 use anyhow::{Context, Result};
 use arboard::Clipboard;
+use mimalloc::MiMalloc;
 use std::fs;
 use std::io::{self, Write};
 use std::path::PathBuf;
+use tokio::runtime;
 
 use cli::{Commands, parse_args};
 use crypto::{decrypt, derive_key, encrypt, generate_salt};
@@ -17,12 +19,29 @@ use database::ClipboardDatabase;
 use models::{ClipboardContentType, ImageData};
 use watcher::start_watcher;
 
-fn main() -> Result<()> {
+use crate::crypto::MasterKey;
+use crate::database::{ClipboardType, NetworkClipboardDatabase};
+use crate::watcher::LocalClipboardWatcher;
+
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
+
+#[tokio::main]
+async fn main() -> Result<()> {
     let args = parse_args();
 
     // Handle install command separately (doesn't need database)
     if matches!(args.command, Commands::Install) {
         return cmd_install();
+    }
+
+    if matches!(args.command, Commands::NetStart { max_entries }) {
+        return cmd_net_start(None).await;
+    }
+
+    if matches!(args.command, Commands::NetBrowse) {
+        // let clipboard_db = ClipboardType::Network(NetworkClipboardDatabase);
+        return cmd_net_browse(None).await;
     }
 
     // Get database path
@@ -37,6 +56,8 @@ fn main() -> Result<()> {
     // Handle commands
     match args.command {
         Commands::Init => cmd_init(db)?,
+        Commands::NetListen => cmd_net_listen(db).await?,
+        // Commands::NetStart { max_entries } => cmd_net_start(max_entries).await?,
         Commands::Start { max_entries } => cmd_start(db, max_entries)?,
         Commands::List { verbose, limit } => cmd_list(db, verbose, limit)?,
         Commands::Show { id } => cmd_show(db, &id)?,
@@ -45,8 +66,32 @@ fn main() -> Result<()> {
         Commands::Clear { yes } => cmd_clear(db, yes)?,
         Commands::Stats => cmd_stats(db)?,
         Commands::Dump { directory, yes } => cmd_dump(db, directory, yes)?,
-        Commands::Browse => cmd_browse(db)?,
+        Commands::Browse => {
+            if !db.is_initialized()? {
+                anyhow::bail!("Database not initialized. Run 'clpd init' first.");
+            }
+
+            // Get password
+            let password = rpassword::prompt_password("Enter master password: ")?;
+
+            // Get salt and derive key
+            let salt = db.get_salt()?;
+            let key = derive_key(&password, &salt)?;
+
+            // Verify password
+            if !db.verify_password(&key)? {
+                anyhow::bail!("❌ Incorrect password!");
+            }
+
+            println!("✓ Password verified");
+            println!();
+            let db = LocalClipboardWatcher::new(db, key.clone(), None)?;
+            let db = ClipboardType::Local(db);
+            cmd_browse(db, key).await?
+        }
         Commands::Install => unreachable!(), // Handled above
+        Commands::NetStart { max_entries } => unreachable!(), // Handled above
+        Commands::NetBrowse => unreachable!(), // Handled above
     };
     // Clean up by deleting any temporary files if needed
     let temp_dir = std::env::temp_dir().join("clpd_temp");
@@ -54,6 +99,84 @@ fn main() -> Result<()> {
         fs::remove_dir_all(&temp_dir).context("Failed to clean up temporary files")?;
     };
     Ok(())
+}
+
+async fn cmd_net_listen(db: ClipboardDatabase) -> Result<()> {
+    // Check if initialized
+    if !db.is_initialized()? {
+        anyhow::bail!("Database not initialized. Run 'clpd init' first.");
+    }
+
+    // Get password
+    let password = rpassword::prompt_password("Enter master password: ")?;
+
+    // Get salt and derive key
+    let salt = db.get_salt()?;
+    let key = derive_key(&password, &salt)?;
+
+    // Verify password
+    if !db.verify_password(&key)? {
+        anyhow::bail!("❌ Incorrect password!");
+    }
+
+    println!("✓ Password verified");
+    println!();
+
+    // Start server and remain running
+    database::run_clipboard_server(db).await;
+    Ok(())
+}
+
+async fn cmd_net_browse(max_entries: Option<usize>) -> Result<()> {
+    // Get password
+    let password = rpassword::prompt_password("Enter master password: ")?;
+
+    // Get salt and derive key
+    // let salt = db.get_salt()?;
+
+    let temp_client = reqwest::Client::new();
+    let salt_resp = temp_client
+        .get("http://localhost:2573/clipboard/salt")
+        .send()
+        .await?;
+    let salt = salt_resp.text().await?;
+    let salt = salt.as_bytes();
+
+    let key = derive_key(&password, &salt)?;
+
+    let network_clip = NetworkClipboardDatabase::new(&key, max_entries)?;
+    let network_clip = ClipboardType::Network(network_clip);
+
+    println!("✓ Password verified");
+    println!();
+    cmd_browse(network_clip, key).await?;
+    Ok(())
+}
+
+async fn cmd_net_start(max_entries: Option<usize>) -> Result<()> {
+    // Get password
+    let password = rpassword::prompt_password("Enter master password: ")?;
+
+    // Get salt and derive key
+    // let salt = db.get_salt()?;
+
+    let temp_client = reqwest::Client::new();
+    let salt_resp = temp_client
+        .get("http://localhost:2573/clipboard/salt")
+        .send()
+        .await?;
+    let salt = salt_resp.text().await?;
+    let salt = salt.as_bytes();
+
+    let key = derive_key(&password, &salt)?;
+
+    let mut network_clip = NetworkClipboardDatabase::new(&key, max_entries)?;
+
+    println!("✓ Password verified");
+    println!();
+
+    // Start watcher
+    network_clip.watch().await
 }
 
 /// Initialize the database
@@ -623,26 +746,26 @@ fn cmd_dump(db: ClipboardDatabase, directory: PathBuf, yes: bool) -> Result<()> 
 }
 
 /// Browse clipboard history with interactive TUI
-fn cmd_browse(db: ClipboardDatabase) -> Result<()> {
+async fn cmd_browse(db: ClipboardType, key: MasterKey) -> Result<()> {
     // Check if initialized
-    if !db.is_initialized()? {
-        anyhow::bail!("Database not initialized. Run 'clpd init' first.");
-    }
+    // if !db.is_initialized().await? {
+    //     anyhow::bail!("Database not initialized. Run 'clpd init' first.");
+    // }
 
-    // Get password
-    let password = rpassword::prompt_password("Enter master password: ")?;
+    // // Get password
+    // let password = rpassword::prompt_password("Enter master password: ")?;
 
-    // Get salt and derive key
-    let salt = db.get_salt()?;
-    let key = derive_key(&password, &salt)?;
+    // // Get salt and derive key
+    // let salt = db.get_salt().await?;
+    // let key = derive_key(&password, &salt)?;
 
-    // Verify password
-    if !db.verify_password(&key)? {
-        anyhow::bail!("❌ Incorrect password!");
-    }
+    // // Verify password
+    // if !db.verify_password(&key).await? {
+    //     anyhow::bail!("❌ Incorrect password!");
+    // }
 
     // Run TUI
-    tui::run(db, key)?;
+    tui::run(db, key).await?;
 
     Ok(())
 }

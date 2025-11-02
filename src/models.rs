@@ -1,5 +1,8 @@
+use crate::crypto::compress;
+use base64::{Engine as _, engine::general_purpose};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::error::Error;
 
 /// Type of clipboard content
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -59,6 +62,19 @@ impl ClipboardEntry {
             self.id,
             self.content_type
         )
+    }
+
+    pub fn to_compressed_string(&self) -> String {
+        let serialized = bincode::serialize(self).expect("Failed to serialize entry");
+        let serialized = compress(&serialized);
+        general_purpose::STANDARD.encode(&serialized)
+    }
+
+    pub fn from_compressed_string(s: &str) -> Result<Self, Box<dyn Error>> {
+        let decoded = general_purpose::STANDARD.decode(s)?;
+        let decompressed = crate::crypto::decompress(&decoded)?;
+        let entry: ClipboardEntry = bincode::deserialize(&decompressed)?;
+        Ok(entry)
     }
 }
 

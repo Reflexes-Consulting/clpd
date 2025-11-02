@@ -8,16 +8,16 @@ use crate::crypto::{MasterKey, encrypt};
 use crate::database::ClipboardDatabase;
 use crate::models::{ClipboardContentType, ClipboardEntry, ImageData};
 
-pub struct ClipboardWatcher {
+pub struct LocalClipboardWatcher {
     clipboard: Clipboard,
-    db: ClipboardDatabase,
+    pub db: ClipboardDatabase,
     key: MasterKey,
     last_hash: Option<String>,
     max_entries: Option<usize>,
     poll_interval: Duration,
 }
 
-impl ClipboardWatcher {
+impl LocalClipboardWatcher {
     pub fn new(db: ClipboardDatabase, key: MasterKey, max_entries: Option<usize>) -> Result<Self> {
         let clipboard = Clipboard::new().context("Failed to initialize clipboard")?;
 
@@ -32,14 +32,14 @@ impl ClipboardWatcher {
     }
 
     /// Calculate SHA-256 hash of data
-    fn hash_data(data: &[u8]) -> String {
+    pub(crate) fn hash_data(data: &[u8]) -> String {
         let mut hasher = Sha256::new();
         hasher.update(data);
         hex::encode(hasher.finalize())
     }
 
     /// Process text clipboard content
-    fn process_text(&mut self, text: &str) -> Result<bool> {
+    pub(crate) fn process_text(&mut self, text: &str) -> Result<bool> {
         let data = text.as_bytes();
         let hash = Self::hash_data(data);
 
@@ -74,7 +74,7 @@ impl ClipboardWatcher {
     }
 
     /// Process image clipboard content
-    fn process_image(&mut self, image_data: &arboard::ImageData) -> Result<bool> {
+    pub(crate) fn process_image(&mut self, image_data: &arboard::ImageData) -> Result<bool> {
         // Store image metadata along with RGBA bytes
         let img_data = ImageData::new(
             image_data.width,
@@ -166,7 +166,7 @@ pub fn start_watcher(
     key: MasterKey,
     max_entries: Option<usize>,
 ) -> Result<()> {
-    let watcher = ClipboardWatcher::new(db, key, max_entries)?;
+    let watcher = LocalClipboardWatcher::new(db, key, max_entries)?;
     watcher.watch()
 }
 
@@ -177,17 +177,17 @@ mod tests {
     #[test]
     fn test_hash_data() {
         let data = b"test data";
-        let hash = ClipboardWatcher::hash_data(data);
+        let hash = LocalClipboardWatcher::hash_data(data);
 
         // SHA-256 produces 64 hex characters
         assert_eq!(hash.len(), 64);
 
         // Same data produces same hash
-        let hash2 = ClipboardWatcher::hash_data(data);
+        let hash2 = LocalClipboardWatcher::hash_data(data);
         assert_eq!(hash, hash2);
 
         // Different data produces different hash
-        let hash3 = ClipboardWatcher::hash_data(b"different data");
+        let hash3 = LocalClipboardWatcher::hash_data(b"different data");
         assert_ne!(hash, hash3);
     }
 }

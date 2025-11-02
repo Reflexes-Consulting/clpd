@@ -20,6 +20,14 @@ pub enum Commands {
     /// Initialize the database with a master password
     Init,
 
+    NetListen,
+
+    NetStart {
+        /// Maximum number of entries to keep (oldest entries are pruned)
+        #[arg(short, long)]
+        max_entries: Option<usize>,
+    },
+
     /// Start the clipboard watcher daemon
     Start {
         /// Maximum number of entries to keep (oldest entries are pruned)
@@ -82,6 +90,8 @@ pub enum Commands {
 
     /// Browse clipboard history with an interactive TUI
     Browse,
+
+    NetBrowse,
 
     /// Install clpd binary to default location and add to PATH
     Install,
